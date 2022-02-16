@@ -170,26 +170,29 @@ double* profile_malr(double* p, double* height, double T, int nlevs){
     //  assuming output profile includes LCL, we need to include
     //  parcel starting temperature in the profile
     profile[0] = T;
-    printf("p0 = %lf, T0 = %lf\n",p[0],profile[0]-273.15);
-    printf("----------------\n");
+    // printf("p0 = %lf, T0 = %lf\n",p[0],profile[0]-273.15);
+    // printf("----------------\n");
     int n; double h_step, temp, pres;
     
     for(int i=1; i<nlevs; i++){
         
-        n = abs((p[i]-p[i-1])/2500);
-        h_step = (height[i]-height[i-1])/n;
+        // n = abs((p[i]-p[i-1])/2500);
+        h_step = height[i]-height[i-1];
+        printf("n = %d, h_step = %lf\n", n, h_step);
         
         temp = profile[i-1]; pres = p[i-1];
-        printf("n = %d\n",n);
-        for(int i=0;i<n;i++){
-            temp -= dT(temp,pres-2500)*h_step;
-        }
+        // printf("n = %d\n",n);
+        // for(int i=0;i<n;i++){
+        //     temp -= dT(temp,pres-2500)*h_step;
+        // }
+
+        temp -= dT(temp,pres)*h_step;
         
-        //profile[i] = profile[i-1] - (dT(profile[i-1],p[i]) * (height[i] - height[i-1]));
+        // profile[i] = profile[i-1] - (dT(profile[i-1],p[i]) * (height[i] - height[i-1]));
         
         profile[i] = temp;
         
-        printf("%lf - %lf\n",p[i],profile[i]-273.15);
+        // printf("%lf - %lf\n",p[i],profile[i]-273.15);
     }
     
     return profile;
@@ -253,25 +256,25 @@ double cape(double* T, double* p, double* h, double T0, double Td0, double P0, i
     memcpy(height+i,&lcl.h,sizeof(double));
     memcpy(height+i+1,h+i,(nlevs-i)*sizeof(double));
     
-    double* dry_profile = profile_dalr(pressure,T0,P0,i);
-    double* moist_profile = profile_malr(pressure+i,height+i,lcl.T,nlevs-i+1);
+    // double* dry_profile = profile_dalr(pressure,T0,P0,i);
+    // double* moist_profile = profile_malr(pressure+i,height+i,lcl.T,nlevs-i+1);
     
-    double* profile = (double*) malloc(nlevs*sizeof(double));
+    // double* profile = (double*) malloc(nlevs*sizeof(double));
     
-    memcpy(profile,dry_profile,i*sizeof(double));
-    memcpy(profile+i,moist_profile,(nlevs-i)*sizeof(double));
+    // memcpy(profile,dry_profile,i*sizeof(double));
+    // memcpy(profile+i,moist_profile,(nlevs-i)*sizeof(double));
 
-    printf("\n++++++ FINAL PROFILE ++++++\n");
+    // printf("\n++++++ FINAL PROFILE ++++++\n");
 
-    for(int i = 0; i < nlevs; i++){
-        printf("%lf\t%lf\n",pressure[i],profile[i] - 273.15);
-    }
+    // for(int i = 0; i < nlevs; i++){
+    //     printf("%lf\t%lf\n",pressure[i],profile[i] - 273.15);
+    // }
 
     // ++++++ INTERPOLATE PROFILE ++++++
     // double dh = 0.1;
-    double* interpolated_temperature = (double*) malloc((INT_NLEVS+1)*sizeof(double));
-    double* interpolated_pressure = (double*) malloc((INT_NLEVS+1)*sizeof(double));
-    double* interpolated_height = (double*) malloc((INT_NLEVS+1)*sizeof(double));
+    double* interpolated_temperature = (double*) malloc(INT_NLEVS*sizeof(double));
+    double* interpolated_pressure = (double*) malloc(INT_NLEVS*sizeof(double));
+    double* interpolated_height = (double*) malloc(INT_NLEVS*sizeof(double));
     
     double p0 = pressure[0], p1 = pressure[1]; 
     double t0 = temperature[0], t1 = temperature[1];
@@ -282,6 +285,8 @@ double cape(double* T, double* p, double* h, double T0, double Td0, double P0, i
     printf("Initial height = %lf\n", initial_height);
 
     int hindex = 0;
+
+    int interpolated_profile_size = 0;
 
     for(int i = 0; i < INT_NLEVS; i++){
         double h = initial_height + i * hdiff;
@@ -329,12 +334,46 @@ double cape(double* T, double* p, double* h, double T0, double Td0, double P0, i
             interpolated_temperature[i] = t0 * w1 + t1 * w0;
             // printf("interpolated_temperature[%d] = %lf * %lf + %lf * %lf = %lf\n", i, t0, w1, t1, w0, interpolated_temperature[i]);
         }
+
+        interpolated_profile_size++;
     }
+
+    int iprofile_lcl_index = 0;
+    while(interpolated_height[iprofile_lcl_index] < lcl.h && iprofile_lcl_index < interpolated_profile_size){
+        iprofile_lcl_index++;
+    }
+
+    printf("+++++++++++++++++\niprofile_lcl_index = %d\n+++++++++++++++++\n", iprofile_lcl_index);
+
+    double* full_interpolated_temperature = (double*) malloc((interpolated_profile_size+1)*sizeof(double));
+    double* full_interpolated_pressure = (double*) malloc((interpolated_profile_size+1)*sizeof(double));
+    double* full_interpolated_height = (double*) malloc((interpolated_profile_size+1)*sizeof(double));
+
+    memcpy(full_interpolated_temperature,interpolated_temperature,iprofile_lcl_index*sizeof(double));
+    memcpy(full_interpolated_temperature+iprofile_lcl_index,&lcl.T,sizeof(double));
+    memcpy(full_interpolated_temperature+iprofile_lcl_index+1,interpolated_temperature+iprofile_lcl_index,(interpolated_profile_size-iprofile_lcl_index)*sizeof(double));
+    
+    memcpy(full_interpolated_pressure,interpolated_pressure,iprofile_lcl_index*sizeof(double));
+    memcpy(full_interpolated_pressure+iprofile_lcl_index,&lcl.p,sizeof(double));
+    memcpy(full_interpolated_pressure+iprofile_lcl_index+1,interpolated_pressure+iprofile_lcl_index,(interpolated_profile_size-iprofile_lcl_index)*sizeof(double));
+    
+    memcpy(full_interpolated_height,interpolated_height,iprofile_lcl_index*sizeof(double));
+    memcpy(full_interpolated_height+iprofile_lcl_index,&lcl.h,sizeof(double));
+    memcpy(full_interpolated_height+iprofile_lcl_index+1,interpolated_height+iprofile_lcl_index,(interpolated_profile_size-iprofile_lcl_index)*sizeof(double));
+
+    double* dry_profile = profile_dalr(full_interpolated_pressure,T0,P0,iprofile_lcl_index);
+    double* moist_profile = profile_malr(full_interpolated_pressure+iprofile_lcl_index,full_interpolated_height+iprofile_lcl_index,lcl.T,interpolated_profile_size-iprofile_lcl_index+1);
+    
+    double* profile = (double*) malloc((interpolated_profile_size+1)*sizeof(double));
+    
+    memcpy(profile,dry_profile,iprofile_lcl_index*sizeof(double));
+    memcpy(profile+iprofile_lcl_index,moist_profile,(interpolated_profile_size+1-iprofile_lcl_index)*sizeof(double));
 
     printf("\n++++++ INTERPOLATED PROFILE ++++++\n");
 
-    for(int i = 0; i < INT_NLEVS; i++){
-        printf("%lf\t%lf\t%lf\n",interpolated_height[i], interpolated_pressure[i], interpolated_temperature[i] - 273.15);
+    for(int i = 0; i < interpolated_profile_size+1; i++){
+        printf("%lf\t%lf\t%lf\t%lf\n",full_interpolated_height[i], full_interpolated_pressure[i], full_interpolated_temperature[i] - 273.15, profile[i] - 273.15);
+        
     }
 
     return 4200.0;
